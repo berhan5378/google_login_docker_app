@@ -1,5 +1,7 @@
 {
-  "require": {
-    "google/apiclient": "^2.0"
-  }
+    "require": {
+        "google/apiclient": "^2.0",
+        "google/apiclient-services": "^0.394.0",
+        "google/auth": "^1.46"
+    },
 }
