@@ -12,6 +12,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Copy only composer files first (for caching)
 COPY composer.json composer.lock* /var/www/html/
 
+RUN docker-php-ext-install pdo pdo_mysql
 # Set working directory
 WORKDIR /var/www/html
 
@@ -24,6 +25,5 @@ RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' /et
 # Permissions
 RUN chown -R www-data:www-data /var/www/html
 
-RUN docker-php-ext-install pdo pdo_mysql
 
 EXPOSE 80
