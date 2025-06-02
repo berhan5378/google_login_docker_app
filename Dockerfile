@@ -16,7 +16,6 @@ COPY composer.json composer.lock* /var/www/html/
 WORKDIR /var/www/html
 
 RUN composer install
-
 # Copy application files
 COPY . /var/www/html
 
