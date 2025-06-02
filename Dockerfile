@@ -9,15 +9,12 @@ RUN apt-get update && apt-get install -y libzip-dev unzip git && docker-php-ext-
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy only composer files first (for caching)
-COPY composer.json composer.lock* /var/www/html/
-
 # Set working directory
 WORKDIR /var/www/html
-
-RUN composer install
 # Copy application files
 COPY . /var/www/html
+# Install PHP dependencies (AFTER copying all files)
+RUN composer install --no-dev --optimize-autoloader
 
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' /etc/apache2/sites-available/000-default.conf
 # Permissions
