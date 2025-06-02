@@ -15,12 +15,7 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . /var/www/html
 
-# Move public files
-RUN mkdir -p /var/www/html/public && mv /var/www/html/index.php /var/www/html/public/index.php
-
-# Set document root to public
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' /etc/apache2/sites-available/000-default.conf
-
 # Permissions
 RUN chown -R www-data:www-data /var/www/html
 
