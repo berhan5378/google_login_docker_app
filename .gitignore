@@ -1,0 +1,4 @@
+/vendor/
+composer.lock 
+/token.json # VERY IMPORTANT: DO NOT COMMIT YOUR ACCESS/REFRESH TOKEN!
+*.log 
