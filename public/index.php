@@ -27,12 +27,12 @@ $client->setAccessType('offline'); // Essential to get a refresh token
 $accessToken = null;
 
 if ($persistentRefreshToken) {
-  $access_token=$client->fetchAccessTokenWithRefreshToken($persistentRefreshToken);
-  $client->setAccessToken($access_token);
- 
+    $access_token = $client->fetchAccessTokenWithRefreshToken($persistentRefreshToken);
+
+    if (isset($access_token['access_token'])) {
+        $client->setAccessToken($access_token);
+    } 
 } 
-
-
 // --- Search Form and Logic ---
 $search_query = '';
 if (isset($_POST['search_query']) && !empty(trim($_POST['search_query']))) {
