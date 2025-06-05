@@ -8,9 +8,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 // REPLACE THESE WITH YOUR ACTUAL VALUES FROM Google Cloud Console
 $clientId = getenv('GOOGLE_CLIENT_ID');
 $clientSecret = getenv('GOOGLE_CLIENT_SECRET');
-$redirectUri = getenv('REDIRECT_URI'); // This must match your Google Cloud Console setting 
-// Define the path for the token file (MUST MATCH oauth2callback.php)
-define('TOKEN_FILE', __DIR__ . '/token.json');
+$redirectUri = getenv('REDIRECT_URI');  
+$persistentRefreshToken = getenv('GOOGLE_REFRESH_TOKEN');  
 
 // Google API Client Setup
 $client = new Google_Client();
@@ -24,61 +23,31 @@ $client->addScope(Google_Service_PeopleService::CONTACTS_OTHER_READONLY);   // F
 $client->addScope(Google_Service_PeopleService::DIRECTORY_READONLY);       // For searching organizational directories
 
 $client->setAccessType('offline'); // Essential to get a refresh token
-
-// --- Token Handling: Prioritize file storage over session for persistence ---
+ 
 $accessToken = null;
-if (file_exists(TOKEN_FILE)) {
-    $tokenData = json_decode(file_get_contents(TOKEN_FILE), true);
-    if (is_array($tokenData) && isset($tokenData['access_token'])) {
-        $client->setAccessToken($tokenData); // Set the full token array
-        $accessToken = $tokenData; // Store it for local checks
-    }
-}
 
-// If no access token from file, check session (might be from an older session)
-if (empty($accessToken) && isset($_SESSION['access_token'])) {
-    $client->setAccessToken($_SESSION['access_token']);
-    $accessToken = $_SESSION['access_token'];
-}
-
-// --- Check for valid access token or attempt refresh ---
-if ($accessToken && $client->isAccessTokenExpired()) {
-    // If access token is expired, try to refresh using the refresh token from file
-    if (isset($accessToken['refresh_token']) && $accessToken['refresh_token']) {
-        try {
-            $client->fetchAccessTokenWithRefreshToken($accessToken['refresh_token']);
-            $newAccessToken = $client->getAccessToken();
-            // Store new access token to file for persistence
-            file_put_contents(TOKEN_FILE, json_encode($newAccessToken));
-            $_SESSION['access_token'] = $newAccessToken; // Also update session
-        } catch (Exception $e) {
-            // Refresh failed, token might be revoked or invalid. Clear and re-authorize.
-            unlink(TOKEN_FILE); // Delete the invalid token file
-            unset($_SESSION['access_token']);
-            echo 'Error refreshing access token: ' . $e->getMessage() . '<br>';
-            echo 'Please re-authorize your account.';
-            echo "<a href='" . htmlspecialchars($client->createAuthUrl()) . "'><button>Re-authorize</button></a>";
-            exit();
-        }
+if ($persistentRefreshToken) {
+    // Attempt to set a dummy access token if no session token,
+    // so client->isAccessTokenExpired() can be called.
+    // The actual access token will be fetched from refresh token.
+    if (!isset($_SESSION['access_token']) || empty($_SESSION['access_token'])) {
+        // A minimal dummy token to allow the client to *try* refreshing
+        $client->setAccessToken(['access_token' => 'dummy', 'expires_in' => 0]);
     } else {
-        // No refresh token available, force re-authorization
-        echo 'Your session has expired or refresh token is missing. Please re-authorize your account.';
-        if (file_exists(TOKEN_FILE)) unlink(TOKEN_FILE); // Clear any old token file
-        unset($_SESSION['access_token']);
-        echo "<a href='" . htmlspecialchars($client->createAuthUrl()) . "'><button>Re-authorize</button></a>";
-        exit();
+        $client->setAccessToken($_SESSION['access_token']);
     }
-} elseif (empty($accessToken) || !$client->getAccessToken()) {
-    // No valid access token found, prompt for initial authorization
-    $authUrl = $client->createAuthUrl();
-    echo "<h1>Welcome to the Google Contacts Search App</h1>";
-    echo "<h2>Please authorize your Google account to proceed:</h2>";
-    echo "<a href='" . htmlspecialchars($authUrl) . "'><button>Authorize Google Account</button></a>";
-    exit(); // Stop execution here, waiting for authorization
-}
 
-// Initialize the Google People Service
-$service = new Google_Service_PeopleService($client);
+    // If current access token is expired or not set, use refresh token
+    if ($client->isAccessTokenExpired() || !$client->getAccessToken()) {
+        try {
+            $client->fetchAccessTokenWithRefreshToken($persistentRefreshToken);
+            $_SESSION['access_token'] = $client->getAccessToken(); // Store new access token in session
+        } catch (Exception $e) { 
+            unset($_SESSION['access_token']);
+        }
+    }
+} 
+
 
 // --- Search Form and Logic ---
 $search_query = '';
@@ -92,12 +61,12 @@ if (isset($_POST['search_query']) && !empty(trim($_POST['search_query']))) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Search Google Contacts</title>
+    <title>Search Contacts</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         .container { max-width: 800px; margin: 0 auto; background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         h1, h2 { color: #333; }
-        form { margin-bottom: 20px; }
+        form { margin-bottom: 20px;display: flex;align-items: center;gap: 10px; }
         input[type="text"] { width: 70%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
         input[type="submit"] { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
         input[type="submit"]:hover { background-color: #45a049; }
@@ -105,16 +74,19 @@ if (isset($_POST['search_query']) && !empty(trim($_POST['search_query']))) {
         .contact-item { border: 1px solid #eee; padding: 10px; margin-bottom: 10px; border-radius: 4px; background-color: #fff; }
         .contact-name { font-weight: bold; color: #007bff; }
         .contact-detail { font-size: 0.9em; color: #555; margin-left: 15px;}
-        .no-results { color: #888; }
-        .logout-link { display: block; margin-top: 20px; text-align: center; }
+        .no-results { color: #888; } 
+        @media (max-width: 425px) {
+            body{
+                 margin: 0;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Search Your Google Contacts</h1>
+        <h1>Search Contacts</h1>
 
-        <form method="POST" action="">
-            <label for="search_query">Search by Name:</label><br>
+        <form method="POST" action=""> 
             <input type="text" id="search_query" name="search_query" value="<?= htmlspecialchars($search_query); ?>" placeholder="Enter name to search...">
             <input type="submit" value="Search">
         </form>
@@ -123,7 +95,10 @@ if (isset($_POST['search_query']) && !empty(trim($_POST['search_query']))) {
             <h2>Results for "<?= htmlspecialchars($search_query); ?>"</h2>
             <div class="contact-list">
                 <?php
+
                 try {
+                    // Initialize the Google People Service
+                    $service = new Google_Service_PeopleService($client);
                     $found_contacts = [];
                     $unique_contacts_map = []; // To store unique contacts by resourceName
 
@@ -166,7 +141,7 @@ if (isset($_POST['search_query']) && !empty(trim($_POST['search_query']))) {
 
 
                     if (empty($found_contacts)) {
-                        echo "<p class='no-results'>No contacts found matching '" . htmlspecialchars($search_query) . "' in your personal contacts or directory.</p>";
+                        echo "<p class='no-results'>No contacts found matching '" . htmlspecialchars($search_query) . "'.</p>";
                     } else {
                         foreach ($found_contacts as $person) {
                             $displayName = 'No Name';
@@ -218,38 +193,15 @@ if (isset($_POST['search_query']) && !empty(trim($_POST['search_query']))) {
                         }
                     }
                 } catch (Google_Service_Exception $e) {
-                    echo "<p style='color: red;'>Error fetching contacts: " . htmlspecialchars($e->getMessage()) . "</p>";
-                    if ($e->getCode() == 401 || $e->getCode() == 403) { // Unauthorized or Permission Denied
-                         // Clear the token file and session on auth errors
-                         if (file_exists(TOKEN_FILE)) unlink(TOKEN_FILE);
-                         unset($_SESSION['access_token']);
-                         echo "<p><a href='" . htmlspecialchars($client->createAuthUrl()) . "'>Please re-authorize your account.</a></p>";
-                    }
-                } catch (Exception $e) {
-                    echo "<p style='color: red;'>An unexpected error occurred: " . htmlspecialchars($e->getMessage()) . "</p>";
+                    echo "<p style='color: red;'>Error fetching contacts </p>"; 
+                } catch (Throwable $e) {
+                    echo "<p style='color: red;'>An unexpected error occurred</p>";
                 }
                 ?>
             </div>
         <?php else : ?>
             <p>Enter a name in the search box above to find contacts.</p>
         <?php endif; ?>
-
-        <div class="logout-link">
-            <p><a href="?logout=true">Log out and clear session</a></p>
-        </div>
     </div>
 </body>
 </html>
-
-<?php
-// Handle simple logout
-if (isset($_GET['logout']) && $_GET['logout'] == 'true') {
-    session_unset(); // Unset all session variables
-    session_destroy(); // Destroy the session
-    if (file_exists(TOKEN_FILE)) { // Delete the persistent token file
-        unlink(TOKEN_FILE);
-    }
-    header('Location: ' . filter_var($redirectUri, FILTER_SANITIZE_URL)); // Redirect to clear the URL
-    exit(); // Always exit after a header redirect
-}
-?>
