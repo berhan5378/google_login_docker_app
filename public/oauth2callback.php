@@ -26,10 +26,10 @@ if (isset($_GET['code'])) {
     $_SESSION['access_token'] = $token;
 
     // Redirect to index.php to remove the code parameter from the URL
-    header('Location: ' . filter_var('index.php', FILTER_SANITIZE_URL));
+    header('Location: ' . filter_var($redirectUri, FILTER_SANITIZE_URL));
     exit();
 } else {
     
-    header('Location: ' . filter_var('index.php', FILTER_SANITIZE_URL));
+    header('Location: ' . filter_var($redirectUri, FILTER_SANITIZE_URL));
     exit();
 }

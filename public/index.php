@@ -27,25 +27,9 @@ $client->setAccessType('offline'); // Essential to get a refresh token
 $accessToken = null;
 
 if ($persistentRefreshToken) {
-    // Attempt to set a dummy access token if no session token,
-    // so client->isAccessTokenExpired() can be called.
-    // The actual access token will be fetched from refresh token.
-    if (!isset($_SESSION['access_token']) || empty($_SESSION['access_token'])) {
-        // A minimal dummy token to allow the client to *try* refreshing
-        $client->setAccessToken(['access_token' => 'dummy', 'expires_in' => 0]);
-    } else {
-        $client->setAccessToken($_SESSION['access_token']);
-    }
-
-    // If current access token is expired or not set, use refresh token
-    if ($client->isAccessTokenExpired() || !$client->getAccessToken()) {
-        try {
-            $client->fetchAccessTokenWithRefreshToken($persistentRefreshToken);
-            $_SESSION['access_token'] = $client->getAccessToken(); // Store new access token in session
-        } catch (Exception $e) { 
-            unset($_SESSION['access_token']);
-        }
-    }
+  $access_token=$client->fetchAccessTokenWithRefreshToken($persistentRefreshToken);
+  $client->setAccessToken($access_token);
+ 
 } 
 
 
